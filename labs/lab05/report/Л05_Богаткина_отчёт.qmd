@@ -1,0 +1,324 @@
+---
+# Preamble
+
+## Author
+author:
+  name: Богаткина Алёна  Александровна
+  degrees: DSc
+  orcid: 0000-0002-0877-7063
+  email: kulyabov-ds@rudn.ru
+  affiliation:
+    - name: Российский университет дружбы народов
+      country: Российская Федерация
+      postal-code: 117198
+      city: Москва
+      address: ул. Миклухо-Маклая, д. 6
+## Title
+title: "Отчёт по лабораторной работе №5"
+subtitle: "Дисциплина: Администрирование сетевых подсистем"
+license: "CC BY"
+## Generic options
+lang: ru-RU
+number-sections: true
+toc: true
+toc-title: "Содержание"
+toc-depth: 2
+## Crossref customization
+crossref:
+  lof-title: "Список иллюстраций"
+  lot-title: "Список таблиц"
+  lol-title: "Листинги"
+## Bibliography
+bibliography:
+  - bib/cite.bib
+csl: _resources/csl/gost-r-7-0-5-2008-numeric.csl
+## Formats
+format:
+### Pdf output format
+  pdf:
+    toc: true
+    number-sections: true
+    colorlinks: false
+    toc-depth: 2
+    lof: true # List of figures
+    lot: true # List of tables
+#### Document
+    documentclass: scrreprt
+    papersize: a4
+    fontsize: 12pt
+    linestretch: 1.5
+#### Language
+    babel-lang: russian
+    babel-otherlangs: english
+#### Biblatex
+    cite-method: biblatex
+    biblio-style: gost-numeric
+    biblatexoptions:
+      - backend=biber
+      - langhook=extras
+      - autolang=other*
+#### Misc options
+    csquotes: true
+    indent: true
+    header-includes: |
+      \usepackage{indentfirst}
+      \usepackage{float}
+      \floatplacement{figure}{H}
+      \usepackage[math,RM={Scale=0.94},SS={Scale=0.94},SScon={Scale=0.94},TT={Scale=MatchLowercase,FakeStretch=0.9},DefaultFeatures={Ligatures=Common}]{plex-otf}
+### Docx output format
+  docx:
+    toc: true
+    number-sections: true
+    toc-depth: 2
+---
+
+# Цель работы
+
+Целью данной работы является приобретение практических навыков по расширенному конфигурированию HTTP-сервера Apache в части безопасности и возможности использования PHP.
+
+# Задание
+
+1. Сгенерировать криптографический ключ и самоподписанный сертификат безопасности для возможности перехода веб-сервера от работы через протокол HTTP к работе через протокол HTTPS
+2. Настроить веб-сервер для работы с PHP
+3. Написать (или скорректировать) скрипт для Vagrant, фиксирующий действия по расширенной настройке HTTP-сервера во внутреннем окружении виртуальной машины server
+
+# Выполнение лабораторной работы
+
+## Конфигурирование HTTP-сервера для работы через протокол HTTPS
+
+Загрузили нашу операционную систему и перешли в рабочий каталог с проектом и запустили виртуальную машину server
+
+Далее на виртуальной машине server вошли под созданным нами в предыдущей работе пользователем и открыли терминал. Перешли в режим суперпользователя: ```sudo -i``` ([рис. @fig-001])
+
+![Переход в режим суперпользователя](image/1.png){#fig-001 width=70%}
+
+В каталоге */etc/ssl* создали каталог *private*: 
+
+```mkdir -p /etc/pki/tls/private```
+
+```ln -s /etc/pki/tls/private /etc/ssl/private```
+
+```cd /etc/pki/tls/private```([рис. @fig-002])
+
+![Создание каталога private](image/2.png){#fig-002 width=70%}
+
+Далее сгенерировали ключ и сертификат, используя команду: 
+
+```openssl req -x509 -nodes -newkey rsa:2048 -keyout www.aabogatkina.net.key -out www.aabogatkina.net.crt``` ([рис. @fig-003])
+
+И заполнили сертификат:
+
+- в строке кода страны указали RU;
+- в строке названия страны указали Russia;
+- в строке названия города указали Moscow;
+- в строке названия организации указали свой логин - aabogatkina;
+- в строке названия подразделения указали свой логин - aabogatkina;
+- в строке названия хоста должно быть указано доменное имя нашего веб-сервера aabogatkina.net;
+– в строке e-mail адреса должен быть указан aabogatkina@aabogatkina.net 
+
+![Генерация ключа и сертификата](image/3.png){#fig-003 width=70%}
+
+Ключ и сертификат должны быть в соответствующих каталогах */etc/ssl/private/* и */etc/ssl/cert/* ([рис. @fig-004])
+
+![Каталоги для ключа и сертификата](image/4.png){#fig-004 width=70%}
+
+Для перехода веб-сервера www.aabogatkina.net на функционирование через протокол HTTPS требуется изменить его конфигурационный файл. Перешли в каталог с конфигурационными файлами: ```cd /etc/httpd/conf.d``` ([рис. @fig-005])
+
+![Каталог с конфигурационными файлами](image/5.png){#fig-005 width=70%}
+
+Открыли файл */etc/httpd/conf.d/www.aabogatkina.net.conf* на редактирование ([рис. @fig-006])\
+
+![Открытие конфигурационного файла](image/6.1.png){#fig-006 width=70%}
+
+Далее заменили содержимое файла */etc/httpd/conf.d/www.aabogatkina.net.conf* на следуюущее ([рис. @fig-007]):
+
+```
+<VirtualHost *:80>
+	ServerAdmin webmaster@aabogatkina.net
+	DocumentRoot /var/www/html/www.aabogatkina.net
+	ServerName www.aabogatkina.net
+	ServerAlias www.aabogatkina.net
+	ErrorLog logs/www.aabogatkina.net-error_log
+	CustomLog logs/www.aabogatkina.net-access_log common
+	RewriteEngine on
+	RewriteRule ^(.*)$ https://%{HTTP_HOST}$1 [R=301,L]
+</VirtualHost>
+
+<IfModule mod_ssl.c>
+<VirtualHost *:443>
+	SSLEngine on
+	ServerAdmin webmaster@aabogatkina.net
+	DocumentRoot /var/www/html/www.aabogatkina.net
+	ServerName www.aabogatkina.net
+	ServerAlias www.aabogatkina.net
+	ErrorLog logs/www.aabogatkina.net-error_log
+	CustomLog logs/www.aabogatkina.net-access_log common
+	SSLCertificateFile /etc/ssl/certs/www.aabogatkina.net.crt
+	SSLCertificateKeyFile /etc/ssl/private/www.aabogatkina.net.key
+</VirtualHost>
+</IfModule>
+```
+
+Пояснения к содержанию файла:
+
+Это конфигурация виртуального хоста Apache для сайта www.aabogatkina.net:
+
+- HTTP (порт 80):
+
+	+ Автоматически перенаправляет всех посетителей на HTTPS-версию
+
+- HTTPS (порт 443):
+
+	+ Обслуживает основную версию сайта
+
+	+ Использует SSL-сертификат для безопасного соединения
+
+	+ Корневая директория: /var/www/html/www.aabogatkina.net
+
+Файл обеспечивает принудительное использование HTTPS и настройку SSL для домена.
+
+![Содержание файла /etc/httpd/conf.d/www.aabogatkina.net.conf](image/6.2.png){#fig-007 width=70%}
+
+Далее внесли изменения в настройки межсетевого экрана на сервере, разрешив работу с https:
+
+```firewall-cmd --list-services```
+
+```firewall-cmd --get-services```
+
+```firewall-cmd --add-service=https```
+
+```firewall-cmd --add-service=https --permanent```
+
+```firewall-cmd --reload``` ([рис. @fig-008])
+
+![Внесение изменений в настройки межсетевого экрана на сервере, разрешив работу с https](image/7.png){#fig-008 width=70%}
+
+Далее перезапустили веб-сервер: ```systemctl restart httpd``` ([рис. @fig-009])
+
+![Перезапуск веб-сервера](image/8.png){#fig-009 width=70%}
+
+После на виртуальной машине client в строке браузера ввели название веб-сервера www.aabogatkina.net и убедились, что произошло автоматическое переключение на работу по протоколу HTTPS. На открывшейся странице с сообщением о незащищённости соединения нажали кнопку «Дополнительно», затем добавили адрес нашего сервера в постоянные исключения ([рис. @fig-010])
+
+![Добавление адреса в постоянные исключения](image/9.1.png){#fig-010 width=70%}
+
+Затем посмотрели сожержание сертификата (нажали на значок с замком в адресной строке и кнопку «Подробнее») ([рис. @fig-011]), ([рис. @fig-012])
+
+![Просмотр содержания сертификата (1)](image/9.2.png){#fig-011 width=70%}
+
+![Просмотр содержания сертификата (2)](image/9.3.png){#fig-012 width=70%}
+
+## Конфигурирование HTTP-сервера для работы с PHP
+
+Установили пакеты для работы с PHP: ```dnf -y install php``` ([рис. @fig-013])
+
+![Установка пакетов для работы с PHP](image/10.png){#fig-013 width=70%}
+
+Далее в каталоге */var/www/html/www.aabogatkina.net* заменили файл *index.html* на *index.php* ([рис. @fig-014])
+
+![Змена файла](image/11.1.png){#fig-014 width=70%}
+
+В нём прописали ([рис. @fig-015]):
+
+```
+<?php
+phpinfo();
+?>
+```
+
+![Содержание файла index.php](image/11.2.png){#fig-015 width=70%}
+
+Скорректировали права доступа в каталог с веб-контентом: ```chown -R apache:apache /var/www``` ([рис. @fig-016])
+
+![Корректировка прав доступа в каталог с веб-контентом](image/12.png){#fig-016 width=70%}
+
+Далее восстановили контекст безопасности в SELinux:
+
+```restorecon -vR /etc```
+
+``restorecon -vR /var/www``` ([рис. @fig-017])
+
+![Восстановление контекста безопасности в SELinux](image/13.png){#fig-017 width=70%}
+
+Перезапустили HTTP-сервер: ```systemctl restart httpd``` ([рис. @fig-018])
+
+![Перезапуск HTTP-сервера](image/14.png){#fig-018 width=70%}
+
+Далее на виртуальной машине client в строке браузера введли название веб-сервера www.aabogatkina.net и убедились, что была выведена страница с информацией об используемой на веб-сервере версии PHP ([рис. @fig-019])
+
+![Страница об используемой на веб-сервере версии PHP](image/15.png){#fig-019 width=70%}
+
+## Внесение изменений в настройки внутреннего окружения виртуальной машины
+
+На виртуальной машине server перешли в каталог для внесения изменений в настройки внутреннего окружения */vagrant/provision/server/http* и в соответствующие каталоги скопировали конфигурационные файлы: 
+
+```cp -R /etc/httpd/conf.d/* /vagrant/provision/server/http/etc/httpd/conf.d```
+
+```cp -R /var/www/html/* /vagrant/provision/server/http/var/www/html```
+
+```mkdir -p /vagrant/provision/server/http/etc/pki/tls/private```
+
+```mkdir -p /vagrant/provision/server/http/etc/pki/tls/certs```
+
+```cp -R /etc/pki/tls/private/www.aabogatkina.net.key /vagrant/provision/server/http/etc/pki/tls/private```
+
+```cp -R /etc/pki/tls/certs/www.aabogatkina.net.crt /vagrant/provision/server/http/etc/pki/tls/certs``` ([рис. @fig-020])
+
+![Копирование конфигурационных файлов](image/16.png){#fig-020 width=70%}
+
+В имеющийся скрипт */vagrant/provision/server/http.sh* внесли изменения, добавив установку PHP и настройку межсетевого экрана, разрешающую работать с https ([рис. @fig-021]), ([рис. @fig-022]):
+
+```
+#!/bin/bash
+echo "Provisioning script $0"
+echo "Install needed packages"
+dnf -y groupinstall "Basic Web Server"
+dnf -y install php
+echo "Copy configuration files"
+cp -R /vagrant/provision/server/http/etc/httpd/* /etc/httpd
+cp -R /vagrant/provision/server/http/var/www/* /var/www
+cp -R /vagrant/provision/server/http/etc/tls/* /ets/tls
+chown -R apache:apache /var/www
+restorecon -vR /etc
+restorecon -vR /var/www
+echo "Configure firewall"
+firewall-cmd --add-service=http
+firewall-cmd --add-service=http --permanent
+firewall-cmd --add-service=https
+firewall-cmd --add-service=https --permanent
+firewall-cmd --reload
+echo "Start http service"
+systemctl enable httpd
+systemctl start httpd
+```
+
+![Открытие скрипта http.sh](image/17.1.png){#fig-021 width=70%}
+
+![Редактирование скрипта http.sh](image/17.2.png){#fig-022 width=70%}
+
+## Контрольные вопросы + ответы
+
+1. В чём отличие HTTP от HTTPS?
+
+HTTP (HyperText Transfer Protocol) – это протокол передачи данных, который используется для передачи информации между клиентом (например, веб-браузером) и сервером. Однако он не обеспечивает шифрование данных, что делает их уязвимыми к перехвату злоумышленниками.
+
+HTTPS (HyperText Transfer Protocol Secure) - это расширение протокола HTTP с добавлением шифрования, обеспечивающее безопасную передачу данных между клиентом и сервером. Протокол HTTPS использует SSL (Secure Sockets Layer) или более современный TLS (Transport Layer Security) для шифрования данных.
+
+2. Каким образом обеспечивается безопасность контента веб-сервера при работе через HTTPS?
+
+Шифрование данных: при использовании HTTPS данные, передаваемые между клиентом и сервером, шифруются, что делает их невозможными для прочтения злоумышленниками, перехватывающими трафик.
+
+Идентификация сервера: сервер предоставляет цифровой сертификат, подтверждающий его легитимность. Этот сертификат выдается сертификационным центром и содержит информацию о владельце сертификата, публичный ключ для шифрования и подпись, подтверждающую подлинность сертификата.
+
+3. Что такое сертификационный центр? Приведите пример.
+
+Определение: сертификационный центр (Центр сертификации) - это доверенная сторона, которая выдает цифровые сертификаты, подтверждающие подлинность владельца сертификата.
+
+Пример: Одним из известных сертификационных центров является "Let's Encrypt". Он предоставляет бесплатные SSL-сертификаты, которые используются для обеспечения безопасного соединения на множестве веб-сайтов. Владельцы веб-сайтов могут получить сертификат от Let's Encrypt, чтобы обеспечить шифрование и подтвердить свою легитимность в онлайн-среде.
+
+# Выводы
+
+В ходе выполнения лабораторной работы №5 мы приобрели практические навыки по расширенному конфигурированию HTTPсервера Apache в части безопасности и возможности использования PHP.
+
+# Список литературы
+
+1. [Лаборатораня работа №5](https://esystem.rudn.ru/pluginfile.php/2854748/mod_resource/content/8/005-http-adv.pdf)
