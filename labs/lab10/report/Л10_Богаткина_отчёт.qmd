@@ -1,0 +1,433 @@
+---
+# Preamble
+
+## Author
+author:
+  name: Богаткина Алёна Александровна
+  degrees: DSc
+  orcid: 0000-0002-0877-7063
+  email: kulyabov-ds@rudn.ru
+  affiliation:
+    - name: Российский университет дружбы народов
+      country: Российская Федерация
+      postal-code: 117198
+      city: Москва
+      address: ул. Миклухо-Маклая, д. 6
+## Title
+title: "Отчёт по лабораторной работе №10"
+subtitle: "Дисциплина: Администрирование сетевых подсистем"
+license: "CC BY"
+## Generic options
+lang: ru-RU
+number-sections: true
+toc: true
+toc-title: "Содержание"
+toc-depth: 2
+## Crossref customization
+crossref:
+  lof-title: "Список иллюстраций"
+  lot-title: "Список таблиц"
+  lol-title: "Листинги"
+## Bibliography
+bibliography:
+  - bib/cite.bib
+csl: _resources/csl/gost-r-7-0-5-2008-numeric.csl
+## Formats
+format:
+### Pdf output format
+  pdf:
+    toc: true
+    number-sections: true
+    colorlinks: false
+    toc-depth: 2
+    lof: true # List of figures
+    lot: true # List of tables
+#### Document
+    documentclass: scrreprt
+    papersize: a4
+    fontsize: 12pt
+    linestretch: 1.5
+#### Language
+    babel-lang: russian
+    babel-otherlangs: english
+#### Biblatex
+    cite-method: biblatex
+    biblio-style: gost-numeric
+    biblatexoptions:
+      - backend=biber
+      - langhook=extras
+      - autolang=other*
+#### Misc options
+    csquotes: true
+    indent: true
+    header-includes: |
+      \usepackage{indentfirst}
+      \usepackage{float}
+      \floatplacement{figure}{H}
+      \usepackage[math,RM={Scale=0.94},SS={Scale=0.94},SScon={Scale=0.94},TT={Scale=MatchLowercase,FakeStretch=0.9},DefaultFeatures={Ligatures=Common}]{plex-otf}
+### Docx output format
+  docx:
+    toc: true
+    number-sections: true
+    toc-depth: 2
+---
+
+# Цель работы
+
+Приобретение практических навыков по конфигурированию SMTP-сервера в части настройки аутентификации.
+
+# Задание
+
+1. Настроить Dovecot для работы с LMTP.
+2. Настроить аутентификацию посредством SASL на SMTP-сервере.
+3. Настроить работу SMTP-сервера поверх TLS.
+4. Скорректировать скрипт для Vagrant, фиксирующий действия расширенной настройки SMTP-сервера во внутреннем окружении виртуальной машины server.
+
+# Выполнение лабораторной работы
+
+## Настройка LMTP в Dovecote
+
+Загрузили нашу операционную систему и перешли в рабочий каталог с проектом. Запустили виртуальную машину server. Далее на виртуальной машине server вошли под созданным нами пользователем и открыли терминал. Перешли в режим суперпользователя: ```sudo -i``` ([рис. @fig-001])
+
+![Переход в режим суперпользователя](image/1.png){#fig-001 width=70%}
+
+Далее в дополнительном терминале запустили мониторинг работы почтовой службы: ```sudo -i``` и ```tail -f /var/log/maillog``` ([рис. @fig-002])
+
+![Мониторинг почтовой службы](image/2.png){#fig-002 width=70%}
+
+В конфигурационном файле /etc/dovecot/dovecot.conf добавили в список почтовых протоколов, по которым разрешено работать Dovecot, протокол LMTP: ```protocols = imap pop3 lmtp```([рис. @fig-003])
+
+![Cписок почтовых протоколов, по которым разрешено работать Dovecot](image/3.png){#fig-003 width=70%}
+
+Настроили в Dovecot сервис lmtp для связи с Postfix. Для этого в файле */etc/dovecot/conf.d/10-master.conf* заменили определение сервиса lmtp на следующую запись ([рис. @fig-004]):
+
+```
+service lmtp {
+	unix_listener /var/spool/postfix/private/dovecot-lmtp {
+		group = postfix
+		user = postfix
+		mode = 0600
+	}
+}
+```
+
+![Редактирование файла /etc/dovecot/conf.d/10-master.conf (1)](image/4.png){#fig-004 width=70%}
+
+Переопределили в Postfix с помощью postconf передачу сообщений не на прямую, а через заданный unix-сокет: ```postconf -e 'mailbox_transport = lmtp:unix:private/dovecot-lmtp'``` ([рис. @fig-005])
+
+![Переопределение в Postfix передачи сообщений не напрямую, а через заданный unix-сокет](image/5.png){#fig-005 width=70%}
+
+В файле */etc/dovecot/conf.d/10-auth.conf* задали формат имени пользователя для аутентификации в форме логина пользователя без указания домена: ```auth_username_format = %Ln``` ([рис. @fig-006])
+
+![Редактирование файла /etc/dovecot/conf.d/10-auth.conf](image/6.png){#fig-006 width=70%}
+
+Перезапустили Postfix и Dovecot ([рис. @fig-007]):
+
+```systemctl restart postfix```
+
+```systemctl restart dovecot```
+
+![Перезапуск Postfix и Dovecot](image/7.png){#fig-007 width=70%}
+
+Далее запустили виртуальную машину client. Из-под учётной записи своего пользователя отправили письмо с клиента: ```echo .| mail -s "LMTP test" aabogatkina@aabogatkina.net``` ([рис. @fig-008])
+
+![Отправка себе письма с клиента](image/8-1.png){#fig-008 width=70%}
+
+В логах видно, что письмо от aabogatkina@client.aabogatkina.net было доставлено на почтовый ящик aabogatkina@aabogatkina.net через LMTP (протокол Dovecot) и сохранено в папке INBOX. Статус доставки: sent ([рис. @fig-009])
+
+![Мониторинг работы почтовой службы (2)](image/8-2.png){#fig-009 width=70%}
+
+На сервере просмотрели почтовый ящик пользователя и убедились что отправленное нами с клиента письмо доставлено в почтовый ящик: ```MAIL=~/Maildir/ mail``` ([рис. @fig-010])
+
+![Просмотр почтового ящика на сервере](image/9.png){#fig-010 width=70%}
+
+## Настройка SMTP-аутентификации
+
+В файле */etc/dovecot/conf.d/10-master.conf* определили службу аутентификации пользователей ([рис. @fig-011]):
+
+```
+service auth {
+	unix_listener /var/spool/postfix/private/auth {
+		group = postfix
+		user = postfix
+		mode = 0660
+	}
+	unix_listener auth-userdb {
+		mode = 0600
+		user = dovecot
+	}
+}
+```
+
+![Редактирование файла /etc/dovecot/conf.d/10-master.conf (2)](image/10.png){#fig-011 width=70%}
+
+**Построчное объяснение записи:**
+
+- service auth - объявление службы аутентификации Dovecot
+
+- unix_listener /var/spool/postfix/private/auth - создание Unix-сокета для взаимодействия Postfix и Dovecot.
+
+- group = postfix, user = postfix - права доступа для сокета: принадлежит пользователю и группе postfix
+
+- mode = 0660 - права доступа: чтение/запись для владельца и группы
+
+- unix_listener auth-userdb - второй сокет для внутреннего доступа к базе пользователей
+
+- mode = 0600, user = dovecot - пава доступа: только для пользователя dovecot
+
+Для Postfix задали тип аутентификации SASL для smtpd и путь к соответствующему unix-сокету ([рис. @fig-012]):
+
+```postconf -e 'smtpd_sasl_type = dovecot'```
+
+```postconf -e 'smtpd_sasl_path = private/auth'``` 
+
+![Задание для Postfix типа аутентификации SASL для smtpd и пути к соответствующему unix-сокету](image/11.png){#fig-012 width=70%}
+
+Настроили Postfix для приёма почты из Интернета только для обслуживаемых нашим сервером пользователей или для произвольных пользователей локальной машины, обеспечивая тем самым запрет на использование почтового сервера в качестве SMTP relay для спамрассылок: ```postconf -e 'smtpd_recipient_restrictions = reject_unknown_recipient_domain, permit_mynetworks,reject_non_fqdn_recipient, reject_unauth_destination,
+reject_unverified_recipient, permit'``` ([рис. @fig-013])
+
+![Настройка Postfix для приёма почты из Интернета только для обслуживаемых нашим сервером пользователей](image/12.png){#fig-013 width=70%}
+
+**Комментарии к указанным опциям:**
+
+- reject_unknown_recipient_domain - отклонять почту для несуществующих доменов
+
+- permit_mynetworks - разрешать релей из доверенных сетей (localhost/private)
+
+- reject_non_fqdn_recipient - отклонять адреса без полного доменного имени
+
+- reject_unauth_destination - главная защита - запрещает релей для чужих доменов
+
+- reject_unverified_recipient - отклонять несуществующих локальных получателей
+
+- permit - разрешить всё остальное (после проверок выше)
+
+В настройках Postfix ограничили приём почты только локальным адресом SMTPсервера сети: ```postconf -e 'mynetworks = 127.0.0.0/8'``` ([рис. @fig-014])
+
+![Ограничение приёма почты только локальным адресом SMTP-сервера сети](image/13.png){#fig-014 width=70%}
+
+Для проверки работы аутентификации временно запустим SMTP-сервер (порт 25) с возможностью аутентификации. Для этого в файле */etc/postfix/master.cf* заменим строку ```smtp inet n - n - - smtpd``` на строку
+
+```
+smtp inet n - n - - smtpd
+	-o smtpd_sasl_auth_enable=yes
+	-o smtpd_recipient_restrictions=reject_non_fqdn_recipient,
+	reject_unknown_recipient_domain,permit_sasl_authenticated,reject
+```
+
+([рис. @fig-015])
+
+![Редактирование файла /etc/postfix/master.cf (1)](image/14.png){#fig-015 width=70%}
+
+Перезапустили Postfix и Dovecot ([рис. @fig-016]):
+
+```systemctl restart postfix```
+
+```systemctl restart dovecot``` 
+
+![Перезапуск Postfix и Dovecot](image/15.png){#fig-016 width=70%}
+
+На клиенте установили telnet: ```sudo -i``` и ```dnf -y install telnet``` ([рис. @fig-017])
+
+![Установка telnet на клиенте](image/16.png){#fig-017 width=70%}
+
+На клиенте получили строку для аутентификации, указав логин нашего пользователя и пароль этого пользователя: ```printf 'aabogatkina\x00aabogatkina\x00123456' | base64``` ([рис. @fig-018])
+
+![Получение строки для аутентификации](image/17.png){#fig-018 width=70%}
+
+Далее подключились на клиенте к SMTP-серверу посредством telnet: ```telnet server.aabogatkina.net 25```. Протестировали соединение, введя ```EHLO test``` и проверили авторизацию, задав: ```AUTH PLAIN <строка для аутентификации>``` ([рис. @fig-019])
+
+![Подключение к SMTP-серверу посредством telnet](image/18.png){#fig-019 width=70%}
+
+## Настройка SMTP over TLS
+
+Предварительно скопировали необходимые файлы сертификата и ключа из каталога */etc/pki/dovecot* в каталог */etc/pki/tls/* в соответствующие подкаталоги ([рис. @fig-020]):
+
+```cp /etc/pki/dovecot/certs/dovecot.pem /etc/pki/tls/certs```
+
+```cp /etc/pki/dovecot/private/dovecot.pem /etc/pki/tls/private```
+
+![Копирование файлов сертификата и ключа в определённые подкаталоги](image/19-1.png){#fig-020 width=70%}
+
+Далее сконфигурировали Postfix, указав пути к сертификату и ключу, а также к каталогу
+для хранения TLS-сессий и уровень безопасности ([рис. @fig-021]):
+
+```postconf -e 'smtpd_tls_cert_file=/etc/pki/tls/certs/dovecot.pem'```
+
+```postconf -e 'smtpd_tls_key_file=/etc/pki/tls/private/dovecot.pem'```
+
+```postconf -e 'smtpd_tls_session_cache_database = btree:/var/lib/postfix/smtpd_scache'```
+
+```postconf -e 'smtpd_tls_security_level = may'```
+
+```postconf -e 'smtp_tls_security_level = may'```
+
+![Конфигурация Postfix, указание путей к сертификату и ключу,  также к каталогу хранения TLS-сессий и уровень безопасности](image/19-2.png){#fig-021 width=70%}
+
+Для того чтобы запустить SMTP-сервер на 587-м порту, в файле */etc/postfix/master.cf* заменили ранее написанные строки на эти ([рис. @fig-022]): 
+
+```
+smtp inet n - n - - smtpd
+submission inet n - n - - smtpd
+	-o smtpd_tls_security_level=encrypt
+	-o smtpd_sasl_auth_enable=yes
+	-o smtpd_recipient_restrictions=reject_non_fqdn_recipient,
+	reject_unknown_recipient_domain,permit_sasl_authenticated,reject
+```
+
+![Редактирование файла /etc/postfix/master.cf (2)](image/20.png){#fig-022 width=70%}
+
+Далее настроили межсетевой экран, разрешив работать службе smtp-submission ([рис. @fig-023]):
+
+```firewall-cmd --get-services```
+
+```firewall-cmd --add-service=smtp-submission```
+
+```firewall-cmd --add-service=smtp-submission --permanent```
+
+```firewall-cmd --reload```
+
+![Настройка межсетевого экрана, разрешение рабоать службе smtp-submission](image/21.png){#fig-023 width=70%}
+
+Перезапустили Postfix: ```systemctl restart postfix``` ([рис. @fig-024])
+
+![Перезапуск Postfix](image/22.png){#fig-024 width=70%}
+
+На клиенте подключились к SMTP-серверу через 587-й порт посредством openssl: ```openssl s_client -starttls smtp -crlf -connect server.aabogatkina.net:587``` ([рис. @fig-025])
+
+![Подключение к SMTP-серверу через 587-й порт посредством openssl](image/23-1.png){#fig-025 width=70%}
+
+Протестировали подключение по telnet: ```EHLO test``` и проверили аутентификацию: ```AUTH PLAIN <строка для аутентификации>``` ([рис. @fig-026])
+
+![Тестирование подключения по telnet и проверка аутентификации](image/23-2.png){#fig-026 width=70%}
+
+Далее в почтовом клиенте Evolution скорректировали настройки учётной записи, для SMTP-сервера указали порт 587, STARTTLS ([рис. @fig-027])
+
+![Настройки учётной записи](image/24-1.png){#fig-027 width=70%}
+
+Далее проверили корректность отправки почтовых сообщений с клиента посредством почтового клиента Evolution ([рис. @fig-028]), ([рис. @fig-029])
+
+![Отправка почтового сообщения](image/24-2.png){#fig-028 width=70%}
+
+![Просмотр пришедшего сообщения](image/24-3.png){#fig-029 width=70%}
+
+## Внесение изменений в настройки внутреннего окружения виртуальной машины
+
+На виртуальной машине server перешлм в каталог для внесения изменений в настройки внутреннего окружения */vagrant/provision/server/* и соответствующие подкаталоги поместили конфигурационные файлы Dovecot: ([рис. @fig-030]):
+
+```cd /vagrant/provision/server```
+
+```mkdir -p /vagrant/provision/server/mail/etc/dovecot/conf.d```
+
+```cp -R /etc/dovecot/dovecot.conf /vagrant/provision/server/mail/etc/dovecot/```
+
+```cp -R /etc/dovecot/conf.d/10-auth.conf /vagrant/provision/server/mail/etc/dovecot/conf.d/```
+
+```cp -R /etc/dovecot/conf.d/auth-system.conf.ext /vagrant/provision/server/mail/etc/dovecot/conf.d/```
+
+```cp -R /etc/dovecot/conf.d/10-mail.conf /vagrant/provision/server/mail/etc/dovecot/conf.d/```
+
+![Копирование конфигурационных файлов Dovecot в каталог dovecot](image/25.png){#fig-030 width=70%}
+
+Далее внесли изменения в файл */vagrant/provision/server/mail.sh*, добавив в него строки по устанвке Dovecot и Telnet, по настройке межсетевого экрана,по настройке Postfix в части задания месторасположения почтового ящика, по перезапуску Postfix и запуску Dovecot ([рис. @fig-031]), ([рис. @fig-032]):
+
+```
+#!/bin/bash
+echo "Provisioning script $0"
+echo "Install needed packages"
+dnf -y install postfix
+dnf -y install s-nail
+dnf -y install dovecot
+dnf -y install telnet
+echo "Copy configuration files"
+#cp -R /vagrant/provision/server/mail/etc/* /etc
+echo "Configure firewall"
+firewall-cmd --add-service=smtp --permanent
+firewall-cmd --reload
+firewall-cmd --get-services
+firewall-cmd --add-service=pop3 --permanent
+firewall-cmd --add-service=pop3s --permanent
+firewall-cmd --add-service=imap --permanent
+firewall-cmd --add-service=imaps --permanent
+firewall-cmd --reload
+firewall-cmd --list-services
+restorecon -vR /etc
+echo "Start postfix service"
+systemctl enable postfix
+systemctl start postfix
+echo "Configure postfix"
+postconf -e 'mydomain = user.net'
+postconf -e 'myorigin = $mydomain'
+postconf -e 'inet_protocols = ipv4'
+postconf -e 'inet_interfaces = all'
+postconf -e 'mydestination = $myhostname, localhost.$mydomain, localhost, $mydomain'
+postconf -e 'mynetworks = 127.0.0.0/8, 192.168.0.0/16'
+postconf -e 'home_mailbox = Maildir/'
+postfix set-permissions
+restorecon -vR /etc
+systemctl stop postfix
+systemctl start postfix
+systemctl enable dovecot
+systemctl start dovecot
+```
+
+![Редактирование файла mail.sh на сервере (1)](image/26-1.png){#fig-031 width=70%}
+
+![Редактирование файла mail.sh на сервере (1)](image/26-2.png){#fig-032 width=70%}
+
+На виртуальной машине client в каталоге */vagrant/provision/client* скорректировали файл *mail.sh*, прописав в нём ```dnf -y install evolution``` ([рис. @fig-033]): 
+
+```
+#!/bin/bash
+echo "Provisioning script $0"
+echo "Install needed packages"
+dnf -y install postfix
+dnf -y install s-nail
+dnf -y install evolution
+echo "Configure postfix"
+postconf -e 'inet_protocols = ipv4'
+echo "Start postfix service"
+systemctl enable postfix
+systemctl start postfix
+```
+
+![Редактирование файла mail.sh на клиенте](image/27.png){#fig-033 width=70%}
+
+## Контрольные вопросы + ответы
+
+1. Приведите пример задания формата аутентификации пользователя в Dovecot в форме логина с указанием домена.
+
+Допустим, у нас есть почтовый ящик с адресом user@example.com. В конфигурационном файле Dovecot (/etc/dovecot/conf.d/10-auth.conf), мы можем указать формат аутентификации следующим образом:
+
+auth_username_format = %Lu 
+
+В этом примере %Lu означает, что аутентификация будет проходить в формате "user" без учета регистра букв. Если вам нужно учитывать домен, вы можете использовать %n: 
+
+auth_username_format = %Ln 
+
+Таким образом, при вводе логина "user@example.com" пользователь будет аутентифицироваться с именем пользователя "user" и доменом "example.com".
+
+2. Какие функции выполняет почтовый Relay-сервер?
+
+- Пересылка почты: Relay-сервер принимает почтовые сообщения от клиентов и пересылает их к адресатам. Это особенно полезно, если у вас нет прямого доступа к серверу назначения или если вы хотите централизованно управлять отправкой почты. 
+
+- Маршрутизация почты: Relay-сервер может определять наилучший маршрут для доставки почты на основе определенных правил и политик. 
+
+- Блокировка спама: Некоторые Relay-серверы выполняют функции фильтрации спама, блокируя нежелательные сообщения до их отправки на сервер назначения.
+
+3. Какие угрозы безопасности могут возникнуть в случае настройки почтового сервера
+как Relay-сервера?
+
+- Открытый Relay: Если сервер настроен как открытый Relay, это может привести к злоупотреблению. Злоумышленники могут использовать сервер для отправки спама, что может повлечь за собой блокировку IP-адреса сервера или другие санкции.
+
+- Спуфинг: Атаки, связанные с подделкой отправителя (спуфинг), могут быть использованы для маскировки настоящего источника почты. Это может быть проблемой, если сервер Relay доверяет внешним источникам без должной аутентификации.
+
+- Отказ в обслуживании (DoS): Атаки типа DoS могут быть направлены на Relay-сервер, перегружая его запросами на пересылку почты и создавая неприемлемую загрузку.
+
+# Выводы
+
+В ходе выполнения лабораторной работы №10 мы приобрели практические навыки по конфигурированию SMTP-сервера в части настройки аутентификации.
+
+# Список литературы
+
+1. [Лаборатораня работа №10](https://esystem.rudn.ru/pluginfile.php/2854770/mod_resource/content/6/010-smtp-adv.pdf)
