@@ -1,0 +1,445 @@
+---
+# Preamble
+
+## Author
+author:
+  name: Богаткина Алёна Александровна
+  degrees: DSc
+  orcid: 0000-0002-0877-7063
+  email: kulyabov-ds@rudn.ru
+  affiliation:
+    - name: Российский университет дружбы народов
+      country: Российская Федерация
+      postal-code: 117198
+      city: Москва
+      address: ул. Миклухо-Маклая, д. 6
+## Title
+title: "Отчёт по лабораторной работе №13"
+subtitle: "Дисциплина: Администрирование сетевых подсистем"
+license: "CC BY"
+## Generic options
+lang: ru-RU
+number-sections: true
+toc: true
+toc-title: "Содержание"
+toc-depth: 2
+## Crossref customization
+crossref:
+  lof-title: "Список иллюстраций"
+  lot-title: "Список таблиц"
+  lol-title: "Листинги"
+## Bibliography
+bibliography:
+  - bib/cite.bib
+csl: _resources/csl/gost-r-7-0-5-2008-numeric.csl
+## Formats
+format:
+### Pdf output format
+  pdf:
+    toc: true
+    number-sections: true
+    colorlinks: false
+    toc-depth: 2
+    lof: true # List of figures
+    lot: true # List of tables
+#### Document
+    documentclass: scrreprt
+    papersize: a4
+    fontsize: 12pt
+    linestretch: 1.5
+#### Language
+    babel-lang: russian
+    babel-otherlangs: english
+#### Biblatex
+    cite-method: biblatex
+    biblio-style: gost-numeric
+    biblatexoptions:
+      - backend=biber
+      - langhook=extras
+      - autolang=other*
+#### Misc options
+    csquotes: true
+    indent: true
+    header-includes: |
+      \usepackage{indentfirst}
+      \usepackage{float}
+      \floatplacement{figure}{H}
+      \usepackage[math,RM={Scale=0.94},SS={Scale=0.94},SScon={Scale=0.94},TT={Scale=MatchLowercase,FakeStretch=0.9},DefaultFeatures={Ligatures=Common}]{plex-otf}
+### Docx output format
+  docx:
+    toc: true
+    number-sections: true
+    toc-depth: 2
+---
+
+# Цель работы
+
+Приобретение навыков настройки сервера NFS для удалённого доступа к ресурсам.
+
+# Задание
+
+1. Установить и настроить сервер NFSv4.
+2. Подмонтировать удалённый ресурс на клиенте.
+3. Подключить каталог с контентом веб-сервера к дереву NFS.
+4. Подключить каталог для удалённой работы вашего пользователя к дереву NFS.
+5. Написать скрипты для Vagrant, фиксирующие действия по установке и настройке сервера NFSv4 во внутреннем окружении виртуальных машин server и client. Соответствующим образом внесите изменения в Vagrantfile.
+
+# Выполнение лабораторной работы
+
+## Настройка сервера NFSv4
+
+Загрузили нашу операционную систему и перешли в рабочий каталог с проектом. Запустили виртуальную машину server. Далее на сервере перешли в режим суперпользователя```sudo -i``` и установили необходимое программное обеспечение: ```dnf -y install nfs-utils``` ([рис. @fig-001])
+
+![Установка nfs-utils на server](image/1.png){#fig-001 width=70%} 
+
+На сервере создали каталог, который предполагается сделать доступным всем пользователям сети (корень дерева NFS): ```mkdir -p /srv/nfs``` ([рис. @fig-002])
+
+![Создание каталога /srv/nfs](image/2.png){#fig-002 width=70%} 
+
+В файле */etc/exports* прописали подключаемый через NFS общий каталог с доступом только на чтение: ```/srv/nfs *(ro)``` ([рис. @fig-003])
+
+![Редактирование файла /etc/exports (1)](image/3.png){#fig-003 width=70%} 
+
+Для общего каталога задали контекст безопасности NFS: ```semanage fcontext -a -t nfs_t "/srv/nfs(/.*)?"``` ([рис. @fig-004])
+
+![Задание контекста безопасности NFS](image/4.png){#fig-004 width=70%}
+
+Применили изменённую настройку SELinux к файловой системе: ```restorecon -vR /srv/nfs``` ([рис. @fig-005])
+
+![Применение изменённых настроек SELinux к файловой системе](image/5.png){#fig-005 width=70%}
+
+Запустили сервер NFS ([рис. @fig-006]):
+
+```systemctl start nfs-server.service```
+
+```systemctl enable nfs-server.service```
+
+![Запуск сервера NFS](image/6.png){#fig-006 width=70%}
+
+Настроили межсетевой экран для работы сервера NFS ([рис. @fig-007]):
+
+```firewall-cmd --add-service=nfs```
+
+```firewall-cmd --add-service=nfs --permanent```
+
+```firewall-cmd --reload```
+
+![Настройка межсетевого экрана для работы сервера NFS](image/7.png){#fig-007 width=70%}
+
+Запустили виртуальную машину client. Далее на виртуальной машине client вошли под созданным нами пользователем и открыли терминал. Перешли в режим суперпользователя: ```sudo -i```. На клиенте установили необходимое для работы NFS программное обеспечение: ```dnf -y install nfs-utils``` ([рис. @fig-008]) 
+
+![Установка nfs-utils на client](image/8.png){#fig-008 width=70%} 
+
+На клиенте попробовали посмотреть имеющиеся подмонтированные удалённые ресурсы: ```showmount -e server.aabogatkina.net``` ([рис. @fig-009])
+
+![Попытка посмотреть имеющиеся подмонтированные удалённые ресурсы](image/9.png){#fig-009 width=70%}
+
+Клиент пытается получить список доступных ресурсов с NFS-сервера, но сервер недоступен
+
+Попробовали на сервере остановить сервис межсетевого экрана: ```systemctl stop firewalld.service``` ([рис. @fig-010])
+
+![Остановка сервиса межсетевого экрана](image/10-1.png){#fig-010 width=70%}
+
+Затем на клиенте вновь попробовали подключиться к удалённо смонтированному ресурсу: ```showmount -e server.aabogatkina.net``` ([рис. @fig-011])
+
+![Повторный просмотр имеющихся подмонтированных удалённых ресурсы](image/10-2.png){#fig-011 width=70%}
+
+После отключения firewall на сервере клиент смог успешно получить список доступных для монтирования NFS-ресурсов.
+
+На сервере запустили сервис межсетевого экрана: ```systemctl start firewalld``` ([рис. @fig-012])
+
+![Запуск сервиса межсетевого экрана](image/11.png){#fig-012 width=70%}
+
+На сервере посмотрели, какие службы задействованы при удалённом монтировании ([рис. @fig-013]), ([рис. @fig-014]):
+
+```lsof | grep TCP```
+
+```lsof | grep UDP```
+
+![Задействованные службы по протоколу TCP](image/12-1.png){#fig-013 width=70%}
+
+![Задействованные службы по протоколу UDP](image/12-2.png){#fig-014 width=70%}
+
+Добавили службы rpc-bind и mountd в настройки межсетевого экрана на сервере ([рис. @fig-015]):
+
+```firewall-cmd --get-services```
+
+```firewall-cmd --add-service=mountd --add-service=rpc-bind```
+
+```firewall-cmd --add-service=mountd --add-service=rpc-bind --permanent```
+
+```firewall-cmd --reload```
+
+![Добавление служб rpc-bind и mountd в настройки межсетевого экрана на сервере](image/13.png){#fig-015 width=70%}
+
+На клиенте проверили подключение удалённого ресурса: ```showmount -e server.aabogatkina.net``` ([рис. @fig-016])
+
+![Проверка подключения удалённого ресурса на клиенте](image/14.png){#fig-016 width=70%}
+
+## Монтирование NFS на клиенте
+
+На клиенте создали каталог, в который будет монтироваться удалённый ресурс, и подмонтировали дерево NFS ([рис. @fig-017]):
+
+```mkdir -p /mnt/nfs```
+
+```mount server.aabogatkina.net:/srv/nfs /mnt/nfs```
+
+![Создание каталога /mnt/nfs и монтирование дерева NFS](image/15.png){#fig-017 width=70%}
+
+Проверили, что общий ресурс NFS подключён правильно: ```mount``` ([рис. @fig-018])
+
+![Проверка правильности подключения ресурса NFS](image/16.png){#fig-018 width=70%}
+
+Пояснения к выведенной информации о монтировании удалённого ресурса:
+
+- Удалённый ресурс /srv/nfs с сервера server.aabogatkina.net смонтирован в локальную директорию /mnt/nfs
+- Используется NFS версии 4.2
+- rw - доступ на чтение и запись
+- relatime - обновление временных меток при доступе
+- rsize=262144, wsize=262144 - размеры буферов чтения/записи (256 КБ)
+- hard - жёсткое монтирование (повторные попытки при сбоях)
+- proto=tcp - использование TCP-протокола
+- clientaddr=192.168.1.30 - IP-адрес клиента
+- addr=192.168.1.1 - IP-адрес сервера
+
+NFS-ресурс успешно смонтирован с оптимальными параметрами для стабильной работы.
+
+На клиенте в конце файла */etc/fstab* добавили следующую запись: ```server.aabogatkina.net:/srv/nfs /mnt/nfs nfs _netdev 0 0``` ([рис. @fig-019])
+
+![Редактирование файла /etc/fstab (1)](image/17.png){#fig-019 width=70%}
+
+Пояснения к команде:
+
+- server.aabogatkina.net:/srv/nfs - удалённый NFS-ресурс (сервер и экспортируемая директория)
+- /mnt/nfs - точка монтирования на клиенте
+- nfs - тип файловой системы (NFS)
+- _netdev - опция, указывающая что это сетевое устройство (монтировать после загрузки сети)
+- 0 - не делать backup с помощью dump
+- 0 - не проверять файловую систему при загрузке
+
+На клиенте проверили наличие автоматического монтирования удалённых ресурсов при запуске операционной системы: ```systemctl status remote-fs.target``` ([рис. @fig-020])
+
+![Проверка наличия автоматического монтирования удалённых ресурсов при запуске операционной системы](image/18.png){#fig-020 width=70%}
+
+Перезапустили клиента и убедились, что удалённый ресурс подключается автоматически ([рис. @fig-021]), ([рис. @fig-022])
+
+![Перезапуск клиента](image/19.png){#fig-021 width=70%}
+
+![Проверка автоматического монтирования после перезагрузки клиента](image/19-2.png){#fig-022 width=70%}
+
+## Подключение каталогов к дереву NFS
+
+На сервере создали общий каталог, в который затем будет подмонтирован каталог с контентом веб-сервера: ```mkdir -p /srv/nfs/www``` ([рис. @fig-028])
+
+![Создание каталога /srv/nfs/www](image/20.png){#fig-023 width=70%}
+
+Подмонтировали каталог web-сервера: ```mount -o bind /var/www/ /srv/nfs/www/``` ([рис. @fig-024])
+
+![Монтирование каталога web-сервера](image/21.png){#fig-024 width=70%}
+
+На сервере проверили, что отображается в каталоге */srv/nfs* ([рис. @fig-025])
+
+![Содержание каталога /srv/nfs](image/22.png){#fig-025 width=70%}
+
+На клиенте посмотрели, что отображается в каталоге */mnt/nfs* ([рис. @fig-026])
+
+![Содержание каталога /mnt/nfs (1)](image/23.png){#fig-026 width=70%}
+
+На сервере в файле */etc/exports* добавили экспорт каталога веб-сервера с удалённого ресурса: ```/srv/nfs/www 192.168.0.0/16(rw)``` ([рис. @fig-027])
+
+![Редактирование файла /etc/exports (2)](image/24.png){#fig-027 width=70%}
+
+Экспортировалм все каталоги, упомянутые в файле */etc/exports*: ```exportfs -r``` ([рис. @fig-028])
+
+![Экспорт всех каталогов (1)](image/25.png){#fig-028 width=70%}
+
+Проверили на клиенте каталог */mnt/nfs* ([рис. @fig-029])
+
+![Содержание каталога /mnt/nfs (2)](image/26.png){#fig-029 width=70%}
+
+На сервере в конце файла */etc/fstab* добавили следующую запись: ```/var/www /srv/nfs/www none bind 0 0``` ([рис. @fig-030])
+
+![Редактирование файла /etc/fstab (2)](image/27.png){#fig-030 width=70%}
+
+Повторно экспортировалм каталоги, указанные в файле */etc/exports*: ```exportfs -r``` ([рис. @fig-031])
+
+![Экспорт всех каталогов (2)](image/28.png){#fig-031 width=70%}
+
+На клиенте проверили каталог */mnt/nfs* ([рис. @fig-032])
+
+![Содержание каталога /mnt/nfs (3)](image/29.png){#fig-032 width=70%}
+
+## Подключение каталогов для работы пользователей
+
+На сервере под пользователем aabogatkina в его домашнем каталоге создали каталог *common* с полными правами доступа только для этого пользователя, а в нём файл *aabogatkina@server.txt* ([рис. @fig-033]):
+
+```mkdir -p -m 700 ~/common```
+
+```cd ~/common```
+
+```touch aabogatkina@server.txt```
+
+![Создание каталога common и файла в нём](image/30.png){#fig-033 width=70%}
+
+На сервере создали общий каталог для работы пользователя aabogatkina по сети: ```mkdir -p /srv/nfs/home/aabogatkina``` ([рис. @fig-034])
+
+![Создание общего каталога](image/31.png){#fig-034 width=70%}
+
+Подмонтировали каталог *common* пользователя aabogatkina в NFS: ```mount -o bind /home/aabogatkina/common /srv/nfs/home/aabogatkina``` ([рис. @fig-035])
+
+![Монтирование каталога common пользователя aabogatkina в NFS](image/32.png){#fig-035 width=70%}
+
+Каталог */srv/nfs/home/aabogatkina* имеет те же права доступа, что и локальный каталог *common*
+
+Подключили каталог пользователя в файле */etc/exports*, прописав в нём: ```/srv/nfs/home/aabogatkina 192.168.0.0/16(rw)``` ([рис. @fig-036])
+
+![Редактирование файла /etc/exports (3)](image/33.png){#fig-036 width=70%}
+
+Внесли изменения в файл */etc/fstab*: ```/home/user/common /srv/nfs/home/aabogatkina none bind 0 0``` ([рис. @fig-037])
+
+![Редактирование файла /etc/fstab (3)](image/34.png){#fig-037 width=70%}
+
+Повторно экспортировали каталоги: ```exportfs -r``` ([рис. @fig-038])
+
+![Экспорт всех каталогов (3)](image/35.png){#fig-038 width=70%}
+
+На клиенте проверили каталог */mnt/nfs* ([рис. @fig-039])
+
+![Содержание каталога /mnt/nfs (4)](image/36.png){#fig-039 width=70%}
+
+На клиенте под пользователем aabogatkina перешли в каталог */mnt/nfs/home/aabogatkina*
+и попробовали создать в нём файл *aabogatkina@client.txt*. Также попробовали проделать это под пользователем root ([рис. @fig-040]):
+
+```cd /mnt/nfs/home/aabogatkina``` 
+
+```touch aabogatkina@client.txt```
+
+![Создание файла на клиенте под пользователем aabogatkina и root](image/37.png){#fig-040 width=70%}
+
+На сервере посмотрели, появились ли изменения в каталоге пользователя */home/aabogatkina/common* ([рис. @fig-041]) 
+
+![Проверка изменений в локальном каталоге пользователя /home/aabogatkina/common](image/38.png){#fig-041 width=70%}
+
+## Внесение изменений в настройки внутреннего окружения виртуальной машины
+
+На виртуальной машине server перешли в каталог для внесения изменений в настройки внутреннего окружения */vagrant/provision/server/* и создали в нём каталог *nfs*, в который поместили в соответствующие подкаталоги конфигурационные файлы ([рис. @fig-042]):
+
+```cd /vagrant/provision/server```
+
+```mkdir -p /vagrant/provision/server/nfs/etc```
+
+```cp -R /etc/exports /vagrant/provision/server/nfs/etc/```
+
+```touch nfs.sh```
+
+```chmod +x nfs.sh``
+
+![Копирование конфигурационных файлов в каталог nfs на сервере и создание исполняемого файла ntp.sh](image/39.png){#fig-042 width=70%}
+
+Открыв его на редактирование, прописали в нём следующий скрипт ([рис. @fig-043]):
+
+```
+#!/bin/bash
+echo "Provisioning script $0"
+echo "Install needed packages"
+dnf -y install nfs-utils
+echo "Copy configuration files"
+cp -R /vagrant/provision/server/nfs/etc/* /etc
+restorecon -vR /etc
+echo "Configure firewall"
+firewall-cmd --add-service nfs --permanent
+firewall-cmd --add-service mountd --add-service rpc-bind --permanent
+firewall-cmd --reload
+echo "Tuning SELinux"
+mkdir -p /srv/nfs
+semanage fcontext -a -t nfs_t "/srv/nfs(/.*)?"
+restorecon -vR /srv/nfs
+echo "Mounting dirs"
+mkdir -p /srv/nfs/www
+mount -o bind /var/www /srv/nfs/www
+echo "/var/www /srv/nfs/www none bind 0 0" >> /etc/fstab
+mkdir -p /srv/nfs/home/user
+mkdir -p -m 700 /home/user/common
+chown user:user /home/user/common
+mount -o bind /home/user/common /srv/nfs/home/user
+echo "/home/user/common /srv/nfs/home/user none bind 0 0" >> /etc/fstab
+echo "Start nfs service"
+systemctl enable nfs-server
+systemctl start nfs-server
+systemctl restart firewalld
+```
+
+![Редактирование файла nfs.sh на сервере](image/40.png){#fig-043 width=70%}
+
+На виртуальной машине client перешли в каталог для внесения изменений в настройки внутреннего окружения */vagrant/provision/client/*. Там создали исполняемый файл nfs.sh ([рис. @fig-044]): 
+
+```cd /vagrant/provision/client```
+
+```touch nfs.sh```
+
+```chmod +x fs.sh```
+
+![Создание исполняемого файла nfs.sh на клиенте](image/41.png){#fig-044 width=70%}
+
+Открыв его на редактирование, прописали в нём следующий скрипт ([рис. @fig-045]):
+
+```
+#!/bin/bash
+echo "Provisioning script $0"
+echo "Install needed packages"
+dnf -y install nfs-utils
+echo "Mounting dirs"
+mkdir -p /mnt/nfs
+mount server.user.net:/srv/nfs /mnt/nfs
+echo "server.user.net:/srv/nfs /mnt/nfs nfs _netdev 0 0" >> /etc/fstab
+restorecon -vR /etc
+```
+
+![Редактирование файла nfs.sh на клиенте](image/42.png){#fig-045 width=70%}
+
+Для отработки созданных скриптов во время загрузки виртуальных машин server и client в конфигурационном файле Vagrantfile необходимо добавить в соответствующих разделах конфигураций для сервера и клиента ([рис. @fig-046]), ([рис. @fig-047]):
+
+```
+server.vm.provision "server nfs",
+	type: "shell",
+	preserve_order: true,
+	path: "provision/server/nfs.sh"
+client.vm.provision "client nfs",
+	type: "shell",
+	preserve_order: true,
+	path: "provision/client/nfs.sh"
+```
+
+![Редактирование файла Vagrantfile (1)](image/43.png){#fig-046 width=70%}
+
+![Редактирование файла Vagrantfile (2)](image/44.png){#fig-047 width=70%}
+
+## Контрольные вопросы + ответы
+
+1. Как называется файл конфигурации, содержащий общие ресурсы NFS?
+
+Файл конфигурации, содержащий общие ресурсы NFS, называется /etc/exports. В этом файле определяются каталоги, которые будут доступны для общего использования через NFS.
+
+2. Какие порты должны быть открыты в брандмауэре, чтобы обеспечить полный доступ к серверу NFS?
+
+Для обеспечения полного доступа к серверу NFS, обычно открываются следующие порты:
+
+- TCP и UDP порт 2049: Основной порт для NFS.
+
+- TCP и UDP порт 111: Порт для службы rpcbind (или портmap), которая используется для регистрации служб RPC.
+
+- Порты для динамически выделяемых портов (обычно в диапазоне 32768-32779), используемых NFS для передачи данных.
+
+3. Какую опцию следует использовать в /etc/fstab, чтобы убедиться, что общие ресурсы NFS могут быть установлены автоматически при перезагрузке?
+
+Для автоматической установки общих ресурсов NFS при загрузке системы, в файле /etc/fstab следует использовать опцию auto. Пример строки в /etc/fstab: server:/remote/export /mnt/nfs_share nfs auto 0 0 
+
+Здесь server:/remote/export - адрес и путь к общему ресурсу NFS, /mnt/nfs_share - точка монтирования, nfs - тип файловой системы, auto - опция для автоматического монтирования при загрузке системы, 0 0 - опции для процесса проверки файловой системы при загрузке.
+
+# Выводы
+
+В ходе выполнения лабораторной работы №13 мы прибрели навыки настройки сервера NFS для удалённого доступа к ресурсам.
+
+# Список литературы
+
+1. [Лаборатораня работа №13](https://esystem.rudn.ru/pluginfile.php/2854782/mod_resource/content/5/013-nfs.pdf)
